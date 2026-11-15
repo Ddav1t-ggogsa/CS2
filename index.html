@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111714" />
+    <meta
+      name="description"
+      content="A real-time Three.js tactical training environment."
+    />
+    <title>Outpost 07 — Tactical Training</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main class="viewport" aria-label="Three-dimensional tactical training map">
+      <div id="scene" class="scene"></div>
+
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Outpost training environment">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="M16 3 28 9.5v13L16 29 4 22.5v-13L16 3Z" />
+              <path d="M16 8.5 23 12.3v7.4l-7 3.8-7-3.8v-7.4l7-3.8Z" />
+              <path d="M16 13v6m-3-3h6" />
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <span class="brand-name">FIELD<span>OPS</span></span>
+            <span class="brand-subtitle">SIMULATION DIVISION</span>
+          </span>
+        </a>
+        <div class="topbar-center">
+          <span class="live-dot"></span>
+          <span id="topbar-mode">BOT TRAINING</span>
+          <span class="bot-count" id="bot-count">00 / 05</span>
+        </div>
+        <div class="session-tag"><span>MAP</span> OUTPOST 07</div>
+      </header>
+
+        <aside class="match-hud" id="match-hud" aria-label="Match scoreboard" hidden>
+          <div class="match-heading">
+            <span id="match-mode">DEATHMATCH</span>
+            <span class="match-timer">
+              <span id="match-timer">05:00</span>
+              <small>REMAINING</small>
+            </span>
+          </div>
+          <div class="scoreboard">
+            <div class="score-team score-blue">
+              <span id="score-blue-label">YOU</span>
+              <strong id="score-blue">00</strong>
+            </div>
+            <span class="score-divider">—</span>
+            <div class="score-team score-red">
+              <strong id="score-red">00</strong>
+              <span id="score-red-label">HOSTILES</span>
+            </div>
+          </div>
+          <div class="score-target" id="score-target">FIRST TO 20</div>
+        </aside>
+
+      <section class="location-card" aria-label="Map location">
+        <div class="eyebrow"><span class="eyebrow-line"></span> TRAINING SECTOR</div>
+        <h1>THE <span>YARD</span></h1>
+        <p>Industrial operations facility</p>
+        <div class="location-rule"></div>
+        <div class="location-meta">
+          <span><i class="meta-icon">⌖</i> 34° 12′ N &nbsp; 117° 09′ W</span>
+          <span>ALT <b>482 M</b></span>
+        </div>
+      </section>
+
+      <aside class="telemetry" aria-label="Rendering performance">
+        <span class="telemetry-label"><span class="telemetry-dot"></span> FPS</span>
+        <span class="telemetry-divider"></span>
+        <span class="fps-value" id="fps">--</span>
+      </aside>
+
+      <aside class="ammo-display" id="ammo-display" aria-label="Weapon and ammunition">
+        <div class="ammo-heading">
+          <span class="weapon-identity">
+            <svg id="ammo-icon" class="ammo-icon" viewBox="0 0 42 24" fill="none" aria-hidden="true">
+              <g class="weapon-icon weapon-icon-rifle">
+                <path d="M3 9h15l4-3h7v3h10v4H29l-4 3H12l-2-3H3z" />
+                <path d="M13 16v5h5v-5m5-7V5h5v4" />
+              </g>
+              <g class="weapon-icon weapon-icon-sniper">
+                <path d="M2 10h11l3-2h10v2h14v4H26l-3 2H10l-2-2H2z" />
+                <path d="M15 8V5h9v3m-8 8v5h5v-5" />
+              </g>
+              <g class="weapon-icon weapon-icon-pistol">
+                <path d="M6 6h22l4 3h7v4h-9l-3 3H17l-2-3H6z" />
+                <path d="M18 16v5h6v-5m1-10V3h8v3" />
+              </g>
+              <g class="weapon-icon weapon-icon-smg">
+                <path d="M4 8h13l3-2h8v3h11v5H27l-3 2H12l-2-3H4z" />
+                <path d="M13 16v5h5v-5m5-8V5h5v3" />
+              </g>
+              <g class="weapon-icon weapon-icon-shotgun">
+                <path d="M2 9h14l4-2h17v5H20l-4 3H10l-2-3H2z" />
+                <path d="M12 15v6h6v-6m4-8V5h13v2" />
+              </g>
+            </svg>
+            <span class="ammo-weapon" id="ammo-weapon">ASSAULT RIFLE</span>
+          </span>
+          <kbd class="ammo-slot" id="ammo-key">1</kbd>
+        </div>
+        <div class="ammo-reading" aria-live="polite">
+          <span class="ammo-current" id="ammo-current">30</span>
+          <span class="ammo-divider">/</span>
+          <span class="ammo-reserve" id="ammo-reserve">90</span>
+          <span class="ammo-unit">RD</span>
+        </div>
+        <div class="ammo-track"><span id="ammo-magazine-fill"></span></div>
+        <div class="reload-indicator" id="reload-indicator" hidden>
+          <span>RELOADING</span>
+          <div class="reload-track"><span id="reload-fill"></span></div>
+        </div>
+        <p class="audio-warning" id="audio-warning" hidden role="status">
+          AUDIO UNAVAILABLE
+        </p>
+      </aside>
+      <aside
+        class="elimination-feed"
+        id="elimination-feed"
+        aria-label="Elimination notifications"
+        aria-live="polite"
+      ></aside>
+
+      <aside class="player-health" id="player-health" aria-label="Player health and armor">
+        <div class="vital-entry">
+          <div class="player-health-heading">
+            <span>HEALTH</span>
+            <strong id="player-health-value">100</strong>
+          </div>
+          <div class="player-health-track">
+            <span id="player-health-fill"></span>
+          </div>
+        </div>
+        <div class="vital-entry armor-entry">
+          <div class="player-health-heading">
+            <span>ARMOR</span>
+            <strong id="player-armor-value">100</strong>
+          </div>
+          <div class="player-health-track armor-track">
+            <span id="player-armor-fill"></span>
+          </div>
+        </div>
+        <span class="player-health-state" id="player-health-state">OPERATIONAL</span>
+      </aside>
+
+      <div class="bottom-left">
+        <span class="status-mark" aria-hidden="true"></span>
+        <span>BOT COMBAT TRAINING</span>
+        <span class="bottom-separator">/</span>
+        <span class="bottom-muted">WEAPON READY</span>
+      </div>
+      <div class="bottom-right">
+        <span>THREE.JS</span>
+        <span class="bottom-separator">·</span>
+        <span>REAL-TIME ENVIRONMENT</span>
+      </div>
+      <aside class="match-stats" id="match-stats" aria-label="Match statistics" hidden>
+        <div><span>KILLS</span><strong id="stat-kills">0</strong></div>
+        <div><span>DEATHS</span><strong id="stat-deaths">0</strong></div>
+        <div><span>ASSISTS</span><strong id="stat-assists">0</strong></div>
+        <div><span>ACCURACY</span><strong id="stat-accuracy">0%</strong></div>
+      </aside>
+
+      <div class="loading" id="loading" role="status" aria-live="polite">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <span>INITIALIZING ENVIRONMENT</span>
+      </div>
+      <div class="error-message" id="error-message" role="alert" hidden></div>
+
+      <div class="reticle" id="reticle" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="damage-indicator" id="damage-indicator" aria-hidden="true">
+        <span class="damage-marker"></span>
+      </div>
+
+      <div class="scope-overlay" id="scope-overlay" aria-label="Sniper scope" hidden>
+        <div class="scope-lens">
+          <span class="scope-horizontal"></span>
+          <span class="scope-vertical"></span>
+          <span class="scope-center"></span>
+        </div>
+        <span class="scope-label">4× OPTIC</span>
+        <span class="scope-mark">HOLD RMB · RELEASE TO LOWER</span>
+      </div>
+
+      <section class="launch-overlay" id="start-screen" aria-label="Main menu" hidden>
+        <div class="menu-shell">
+          <aside class="menu-sidebar">
+            <div class="menu-logo">
+              <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                  <path d="M16 3 28 9.5v13L16 29 4 22.5v-13L16 3Z" />
+                  <path d="M16 8.5 23 12.3v7.4l-7 3.8-7-3.8v-7.4l7-3.8Z" />
+                  <path d="M16 13v6m-3-3h6" />
+                </svg>
+              </span>
+              <span class="brand-copy">
+                <span class="brand-name">FIELD<span>OPS</span></span>
+                <span class="brand-subtitle">SIMULATION DIVISION</span>
+              </span>
+            </div>
+            <div class="menu-navigation" aria-label="Main navigation">
+              <button class="menu-nav-button is-active" type="button" data-menu-page="home">
+                <span class="menu-nav-index">01</span><span>PLAY</span><span class="menu-nav-arrow">→</span>
+              </button>
+              <button class="menu-nav-button" id="menu-modes-button" type="button" data-menu-page="modes">
+                <span class="menu-nav-index">02</span><span>GAME MODES</span><span class="menu-nav-arrow">→</span>
+              </button>
+              <button class="menu-nav-button" id="menu-inventory-button" type="button" data-menu-page="inventory">
+                <span class="menu-nav-index">03</span><span>INVENTORY</span><span class="menu-nav-arrow">→</span>
+              </button>
+              <button class="menu-nav-button" id="menu-settings-button" type="button" data-menu-page="settings">
+                <span class="menu-nav-index">04</span><span>SETTINGS</span><span class="menu-nav-arrow">→</span>
+              </button>
+              <button class="menu-nav-button menu-exit-button" id="menu-exit-button" type="button">
+                <span class="menu-nav-index">05</span><span>EXIT</span><span class="menu-nav-arrow">↗</span>
+              </button>
+            </div>
+            <div class="menu-sidebar-foot">
+              <span class="status-mark"></span>
+              <span id="menu-status">SYSTEM READY</span>
+              <span class="menu-build">BUILD 0.7.4</span>
+            </div>
+          </aside>
+
+          <div class="menu-content">
+            <div class="menu-topline">
+              <span><span class="eyebrow-line"></span> FIELD OPERATIONS SIMULATOR</span>
+              <span>OUTPOST 07 <i> / </i> TRAINING SECTOR</span>
+            </div>
+            <section class="menu-page is-current" id="menu-home-panel" data-menu-panel="home" aria-labelledby="launch-title">
+              <div class="home-copy">
+                <div class="eyebrow"><span class="eyebrow-line"></span> INDUSTRIAL OPERATIONS FACILITY</div>
+                <h1 class="menu-title" id="launch-title">THE <span>YARD</span></h1>
+                <p class="launch-description" id="launch-description">
+                  A live tactical training range. Choose your operation and deploy.
+                </p>
+                <div class="home-status">
+                  <span><i class="live-dot"></i> ENVIRONMENT ACTIVE</span>
+                  <span id="home-mode-summary">DEATHMATCH · NORMAL</span>
+                </div>
+                <button class="menu-deploy-button" id="play-button" type="button">
+                  <span><small>DEPLOY TO</small><strong id="deploy-mode-label">DEATHMATCH</strong></span>
+                  <span class="play-arrow" aria-hidden="true">→</span>
+                </button>
+                <p class="lock-message" id="lock-message" role="status" aria-live="polite"></p>
+              </div>
+              <div class="home-side-panel">
+                <span class="side-panel-index">SECTOR / 07</span>
+                <span class="side-panel-coordinate">34° 12′ N<br />117° 09′ W</span>
+                <span class="side-panel-rule"></span>
+                <span class="side-panel-caption">LIVE SIMULATION<br />SINGLE OPERATOR</span>
+                <div class="home-quick-controls">
+                  <label class="difficulty-setting" for="bot-difficulty">
+                    <span>BOT DIFFICULTY</span>
+                    <select id="bot-difficulty">
+                      <option value="easy">EASY</option>
+                      <option value="normal" selected>NORMAL</option>
+                      <option value="hard">HARD</option>
+                    </select>
+                  </label>
+                  <label class="difficulty-setting" for="game-mode">
+                    <span>GAME MODE</span>
+                    <select id="game-mode">
+                      <option value="deathmatch" selected>DEATHMATCH</option>
+                      <option value="teamDeathmatch">TEAM DEATHMATCH</option>
+                      <option value="practice">PRACTICE</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="menu-page" id="menu-modes-panel" data-menu-panel="modes" aria-labelledby="modes-title" hidden>
+              <div class="menu-page-heading">
+                <div class="eyebrow"><span class="eyebrow-line"></span> SELECT OPERATION</div>
+                <h2 id="modes-title">GAME <span>MODES</span></h2>
+                <p>Every mode runs against the live tactical simulation.</p>
+              </div>
+              <div class="mode-card-grid">
+                <button class="mode-card is-selected" type="button" data-mode-option="deathmatch">
+                  <span class="mode-card-index">01 / SOLO</span>
+                  <strong>DEATHMATCH</strong>
+                  <span>Eliminate hostiles. First operator to 20 takes the round.</span>
+                  <span class="mode-card-footer">05:00 <i>·</i> FIRST TO 20</span>
+                </button>
+                <button class="mode-card" type="button" data-mode-option="teamDeathmatch">
+                  <span class="mode-card-index">02 / SQUAD</span>
+                  <strong>TEAM DEATHMATCH</strong>
+                  <span>Fight with blue squadmates against the opposing team.</span>
+                  <span class="mode-card-footer">05:00 <i>·</i> FIRST TO 30</span>
+                </button>
+                <button class="mode-card" type="button" data-mode-option="practice">
+                  <span class="mode-card-index">03 / RANGE</span>
+                  <strong>PRACTICE</strong>
+                  <span>Train your aim on reactive targets with unlimited ammo.</span>
+                  <span class="mode-card-footer">OPEN SESSION <i>·</i> UNLIMITED AMMO</span>
+                </button>
+              </div>
+              <button class="menu-deploy-button menu-page-action" id="mode-play-button" type="button">
+                <span><small>DEPLOY TO</small><strong id="mode-deploy-label">DEATHMATCH</strong></span>
+                <span class="play-arrow" aria-hidden="true">→</span>
+              </button>
+            </section>
+
+            <section class="menu-page inventory-page" id="menu-inventory-panel" data-menu-panel="inventory" aria-labelledby="inventory-title" hidden>
+              <div class="menu-page-heading">
+                <div class="eyebrow"><span class="eyebrow-line"></span> OPERATOR LOADOUT</div>
+                <h2 id="inventory-title">WEAPON <span>INVENTORY</span></h2>
+                <p>Select your starting weapon and equip an original finish.</p>
+              </div>
+              <div class="inventory-layout">
+                <div class="inventory-list" id="inventory-list" aria-label="Available weapons">
+                  <button class="inventory-weapon is-selected" type="button" data-weapon-option="assaultRifle">
+                    <span class="inventory-slot">01</span><svg class="inventory-glyph" viewBox="0 0 44 24" aria-hidden="true"><path d="M2 9h15l4-3h8v3h12v4H29l-4 3H12l-2-3H2zM13 16v5h5v-5m5-7V5h5v4" /></svg>
+                    <span class="inventory-weapon-copy"><strong>ASSAULT RIFLE</strong><small>VERSATILE · FULL AUTO</small></span><span class="inventory-check">✓</span>
+                  </button>
+                  <button class="inventory-weapon" type="button" data-weapon-option="sniperRifle">
+                    <span class="inventory-slot">02</span><svg class="inventory-glyph" viewBox="0 0 44 24" aria-hidden="true"><path d="M1 10h12l3-2h10v2h17v4H26l-3 2H10l-2-2H1zM15 8V5h9v3m-8 8v5h5v-5" /></svg>
+                    <span class="inventory-weapon-copy"><strong>SNIPER RIFLE</strong><small>PRECISION · OPTIC</small></span><span class="inventory-check">✓</span>
+                  </button>
+                  <button class="inventory-weapon" type="button" data-weapon-option="pistol">
+                    <span class="inventory-slot">03</span><svg class="inventory-glyph" viewBox="0 0 44 24" aria-hidden="true"><path d="M5 6h23l4 3h8v4h-9l-3 3H16l-2-3H5zM17 16v5h6v-5m2-10V3h8v3" /></svg>
+                    <span class="inventory-weapon-copy"><strong>PISTOL</strong><small>SIDEARM · SEMI AUTO</small></span><span class="inventory-check">✓</span>
+                  </button>
+                  <button class="inventory-weapon" type="button" data-weapon-option="smg">
+                    <span class="inventory-slot">04</span><svg class="inventory-glyph" viewBox="0 0 44 24" aria-hidden="true"><path d="M3 8h14l3-2h8v3h13v5H27l-3 2H11l-2-3H3zM12 16v5h5v-5m6-8V5h5v3" /></svg>
+                    <span class="inventory-weapon-copy"><strong>SMG</strong><small>HIGH RATE · CLOSE RANGE</small></span><span class="inventory-check">✓</span>
+                  </button>
+                  <button class="inventory-weapon" type="button" data-weapon-option="shotgun">
+                    <span class="inventory-slot">05</span><svg class="inventory-glyph" viewBox="0 0 44 24" aria-hidden="true"><path d="M1 9h15l4-2h19v5H20l-4 3H9l-2-3H1zM11 15v6h6v-6m5-8V5h14v2" /></svg>
+                    <span class="inventory-weapon-copy"><strong>SHOTGUN</strong><small>8-PELLET · BREACHER</small></span><span class="inventory-check">✓</span>
+                  </button>
+                  <label class="skin-picker" for="weapon-skin">
+                    <span>WEAPON FINISH</span>
+                    <select id="weapon-skin">
+                      <option value="field">FIELD ISSUE</option>
+                      <option value="arctic">ARCTIC CERAMIC</option>
+                      <option value="obsidian">OBSIDIAN</option>
+                      <option value="ember">EMBERLINE</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="weapon-preview-card">
+                  <div class="preview-label"><span>3D ARMORY</span><span id="preview-skin-label">FIELD ISSUE</span></div>
+                  <div class="weapon-preview" id="weapon-preview" aria-label="Rotating 3D weapon preview"></div>
+                  <div class="preview-footer"><strong id="preview-weapon-name">ASSAULT RIFLE</strong><span>DRAG TO ROTATE</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="menu-page settings-page" id="menu-settings-panel" data-menu-panel="settings" aria-labelledby="settings-title" hidden>
+              <div class="menu-page-heading">
+                <div class="eyebrow"><span class="eyebrow-line"></span> SYSTEM CONFIGURATION</div>
+                <h2 id="settings-title">GAME <span>SETTINGS</span></h2>
+                <p>Changes apply immediately and are saved on this device.</p>
+              </div>
+              <div class="settings-grid">
+                <div class="settings-group">
+                  <h3>CONTROLS</h3>
+                  <label class="setting-row" for="mouse-sensitivity">
+                    <span>MOUSE SENSITIVITY <output id="mouse-sensitivity-value" for="mouse-sensitivity">100%</output></span>
+                    <input id="mouse-sensitivity" type="range" min="0.25" max="2.5" step="0.05" value="1" />
+                  </label>
+                  <label class="setting-row" for="crosshair-color">
+                    <span>CROSSHAIR COLOR</span>
+                    <select id="crosshair-color">
+                      <option value="#f18a52">ORANGE</option>
+                      <option value="#f5f4ed">WHITE</option>
+                      <option value="#f0524f">RED</option>
+                      <option value="#72d8d0">CYAN</option>
+                    </select>
+                  </label>
+                  <label class="setting-row" for="crosshair-size">
+                    <span>CROSSHAIR SIZE</span>
+                    <select id="crosshair-size">
+                      <option value="12">SMALL</option>
+                      <option value="18">MEDIUM</option>
+                      <option value="26">LARGE</option>
+                    </select>
+                  </label>
+                  <label class="setting-row" for="crosshair-shape">
+                    <span>CROSSHAIR SHAPE</span>
+                    <select id="crosshair-shape">
+                      <option value="classic">CLASSIC</option>
+                      <option value="cross">CROSS</option>
+                      <option value="dot">DOT</option>
+                      <option value="circle">CIRCLE</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="settings-group">
+                  <h3>AUDIO</h3>
+                  <label class="setting-row" for="master-volume">
+                    <span>MASTER <output id="master-volume-value" for="master-volume">80%</output></span>
+                    <input id="master-volume" type="range" min="0" max="1" step="0.01" value="0.8" />
+                  </label>
+                  <label class="setting-row" for="music-volume">
+                    <span>MUSIC <output id="music-volume-value" for="music-volume">28%</output></span>
+                    <input id="music-volume" type="range" min="0" max="1" step="0.01" value="0.28" />
+                  </label>
+                  <label class="setting-row" for="effects-volume">
+                    <span>SOUND EFFECTS <output id="effects-volume-value" for="effects-volume">78%</output></span>
+                    <input id="effects-volume" type="range" min="0" max="1" step="0.01" value="0.78" />
+                  </label>
+                  <h3 class="settings-subheading">DISPLAY</h3>
+                  <label class="setting-row" for="graphics-quality">
+                    <span>GRAPHICS QUALITY</span>
+                    <select id="graphics-quality">
+                      <option value="low">LOW</option>
+                      <option value="medium">MEDIUM</option>
+                      <option value="high">HIGH</option>
+                    </select>
+                  </label>
+                  <label class="setting-row setting-toggle" for="shadows-enabled">
+                    <span>SHADOWS</span><input id="shadows-enabled" type="checkbox" checked />
+                  </label>
+                  <label class="setting-row setting-toggle" for="fps-enabled">
+                    <span>FPS COUNTER</span><input id="fps-enabled" type="checkbox" checked />
+                  </label>
+                  <button class="fullscreen-button" id="fullscreen-button" type="button">ENTER FULLSCREEN <span>↗</span></button>
+                </div>
+              </div>
+              <p class="settings-status" id="settings-status" role="status" aria-live="polite">SETTINGS SAVED LOCALLY</p>
+            </section>
+            <div class="menu-bottomline">
+              <span><kbd>ESC</kbd> PAUSE / RELEASE MOUSE</span>
+              <span>OUTPOST 07 <i>·</i> LIVE ENVIRONMENT</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="pause-overlay" id="pause-screen" aria-label="Paused" hidden>
+        <div class="pause-card">
+          <div class="eyebrow"><span class="eyebrow-line"></span> OPERATOR ON STANDBY</div>
+          <h2>MISSION <span>PAUSED</span></h2>
+          <p>Your current operation is secured. Resume when ready.</p>
+          <button class="menu-deploy-button" id="resume-button" type="button">
+            <span><small>RETURN TO</small><strong>OPERATION</strong></span><span class="play-arrow">→</span>
+          </button>
+          <button class="pause-action" id="pause-restart-button" type="button">RESTART MATCH</button>
+          <button class="pause-action" id="pause-main-menu-button" type="button">RETURN TO MAIN MENU</button>
+          <button class="pause-action pause-settings-button" id="pause-settings-button" type="button">OPEN SETTINGS</button>
+          <p class="lock-message" id="pause-lock-message" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section
+        class="scoreboard-overlay"
+        id="scoreboard-screen"
+        aria-label="Match scoreboard"
+        hidden
+      >
+        <div class="scoreboard-card">
+          <div class="scoreboard-title">
+            <div><span class="eyebrow-line"></span> MATCH INTEL</div>
+            <span>RELEASE TAB TO CLOSE</span>
+          </div>
+          <h2 id="scoreboard-mode">DEATHMATCH</h2>
+          <div class="scoreboard-total">
+            <span id="scoreboard-blue">00</span>
+            <small>TEAM SCORE</small>
+            <span id="scoreboard-red">00</span>
+          </div>
+          <div class="scoreboard-table-wrap">
+            <table class="scoreboard-table">
+              <thead>
+                <tr><th>TEAM</th><th>OPERATOR</th><th>K</th><th>D</th><th>A</th></tr>
+              </thead>
+              <tbody id="scoreboard-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="match-end-overlay"
+        id="match-end-screen"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="match-end-title"
+        hidden
+      >
+        <div class="match-end-card">
+          <div class="eyebrow"><span class="eyebrow-line"></span> MATCH COMPLETE</div>
+          <h2 id="match-end-title">VICTORY</h2>
+          <p id="match-end-description">The match is over.</p>
+          <div class="result-score" id="result-score">00 — 00</div>
+          <div class="result-stats">
+            <span>KILLS <strong id="result-kills">0</strong></span>
+            <span>DEATHS <strong id="result-deaths">0</strong></span>
+            <span>ASSISTS <strong id="result-assists">0</strong></span>
+            <span>ACCURACY <strong id="result-accuracy">0%</strong></span>
+          </div>
+          <button class="play-button" id="restart-match-button" type="button">
+            <span>RESTART MATCH</span><span class="play-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+
+      <section
+        class="death-overlay"
+        id="death-screen"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="death-title"
+        hidden
+      >
+        <div class="death-card">
+          <div class="eyebrow"><span class="eyebrow-line"></span> FIELD STATUS / KIA</div>
+          <h2 id="death-title">YOU WERE <span>ELIMINATED</span></h2>
+          <p>Operator health depleted. Redeploy to return to the training yard.</p>
+          <button class="play-button" id="respawn-button" type="button">
+            <span>RESPAWN</span><span class="play-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
