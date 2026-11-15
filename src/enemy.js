@@ -221,6 +221,11 @@ class WaypointGrid {
     this.rows = Math.floor((this.maxZ - this.minZ) / WAYPOINT_SPACING) + 1;
     this.nodes = [];
     this.validNodes = [];
+    this.blockersByCell = Array.from(
+      { length: this.rows * this.columns },
+      () => [],
+    );
+    this.indexColliders();
 
     for (let row = 0; row < this.rows; row += 1) {
       for (let column = 0; column < this.columns; column += 1) {
@@ -271,11 +276,70 @@ class WaypointGrid {
     return row * this.columns + column;
   }
 
-  isBlockedAt(x, z) {
+  indexColliders() {
     const feet = GROUND_HEIGHT;
     const head = feet + ENEMY_HEIGHT;
-    return this.colliders.some((box) => {
-      if (feet >= box.max.y || head <= box.min.y) return false;
+    for (const box of this.colliders) {
+      if (feet >= box.max.y || head <= box.min.y) continue;
+      if (
+        box.max.x + ENEMY_RADIUS < this.minX ||
+        box.min.x - ENEMY_RADIUS > this.maxX ||
+        box.max.z + ENEMY_RADIUS < this.minZ ||
+        box.min.z - ENEMY_RADIUS > this.maxZ
+      ) {
+        continue;
+      }
+
+      const minColumn = THREE.MathUtils.clamp(
+        Math.floor((box.min.x - ENEMY_RADIUS - this.minX) / WAYPOINT_SPACING),
+        0,
+        this.columns - 1,
+      );
+      const maxColumn = THREE.MathUtils.clamp(
+        Math.floor((box.max.x + ENEMY_RADIUS - this.minX) / WAYPOINT_SPACING),
+        0,
+        this.columns - 1,
+      );
+      const minRow = THREE.MathUtils.clamp(
+        Math.floor((box.min.z - ENEMY_RADIUS - this.minZ) / WAYPOINT_SPACING),
+        0,
+        this.rows - 1,
+      );
+      const maxRow = THREE.MathUtils.clamp(
+        Math.floor((box.max.z + ENEMY_RADIUS - this.minZ) / WAYPOINT_SPACING),
+        0,
+        this.rows - 1,
+      );
+
+      for (let row = minRow; row <= maxRow; row += 1) {
+        for (let column = minColumn; column <= maxColumn; column += 1) {
+          this.blockersByCell[this.index(row, column)].push(box);
+        }
+      }
+    }
+  }
+
+  isBlockedAt(x, z) {
+    const outsideGrid =
+      x < this.minX || x > this.maxX || z < this.minZ || z > this.maxZ;
+    const candidates = outsideGrid
+      ? this.colliders
+      : this.blockersByCell[this.index(
+        THREE.MathUtils.clamp(
+          Math.floor((z - this.minZ) / WAYPOINT_SPACING),
+          0,
+          this.rows - 1,
+        ),
+        THREE.MathUtils.clamp(
+          Math.floor((x - this.minX) / WAYPOINT_SPACING),
+          0,
+          this.columns - 1,
+        ),
+      )];
+    return candidates.some((box) => {
+      if (GROUND_HEIGHT >= box.max.y || GROUND_HEIGHT + ENEMY_HEIGHT <= box.min.y) {
+        return false;
+      }
       const closestX = THREE.MathUtils.clamp(x, box.min.x, box.max.x);
       const closestZ = THREE.MathUtils.clamp(z, box.min.z, box.max.z);
       const dx = x - closestX;
@@ -327,10 +391,8 @@ class WaypointGrid {
     costs[start] = 0;
     const previous = new Int32Array(total);
     previous.fill(-1);
-    const open = [start];
-    const inOpen = new Uint8Array(total);
+    const open = [];
     const closed = new Uint8Array(total);
-    inOpen[start] = 1;
 
     const heuristic = (index) => {
       const node = this.nodes[index];
@@ -340,19 +402,47 @@ class WaypointGrid {
       return Math.max(dx, dz) + (Math.SQRT2 - 1) * Math.min(dx, dz);
     };
 
-    while (open.length > 0) {
-      let bestOpenIndex = 0;
-      let bestScore = costs[open[0]] + heuristic(open[0]);
-      for (let index = 1; index < open.length; index += 1) {
-        const score = costs[open[index]] + heuristic(open[index]);
-        if (score < bestScore) {
-          bestScore = score;
-          bestOpenIndex = index;
-        }
+    const pushOpen = (entry) => {
+      let index = open.length;
+      open.push(entry);
+      while (index > 0) {
+        const parentIndex = Math.floor((index - 1) / 2);
+        if (open[parentIndex].score <= entry.score) break;
+        open[index] = open[parentIndex];
+        index = parentIndex;
       }
+      open[index] = entry;
+    };
 
-      const currentIndex = open.splice(bestOpenIndex, 1)[0];
-      inOpen[currentIndex] = 0;
+    const popOpen = () => {
+      const first = open[0];
+      const last = open.pop();
+      if (open.length > 0) {
+        let index = 0;
+        while (true) {
+          const leftIndex = index * 2 + 1;
+          const rightIndex = leftIndex + 1;
+          if (leftIndex >= open.length) break;
+          let childIndex = leftIndex;
+          if (
+            rightIndex < open.length &&
+            open[rightIndex].score < open[leftIndex].score
+          ) {
+            childIndex = rightIndex;
+          }
+          if (open[childIndex].score >= last.score) break;
+          open[index] = open[childIndex];
+          index = childIndex;
+        }
+        open[index] = last;
+      }
+      return first;
+    };
+
+    pushOpen({ index: start, score: heuristic(start) });
+    while (open.length > 0) {
+      const currentIndex = popOpen().index;
+      if (closed[currentIndex]) continue;
       if (currentIndex === goal) break;
       closed[currentIndex] = 1;
 
@@ -364,10 +454,10 @@ class WaypointGrid {
 
         costs[nextIndex] = tentativeCost;
         previous[nextIndex] = currentIndex;
-        if (!inOpen[nextIndex]) {
-          open.push(nextIndex);
-          inOpen[nextIndex] = 1;
-        }
+        pushOpen({
+          index: nextIndex,
+          score: tentativeCost + heuristic(nextIndex),
+        });
       }
     }
 
@@ -461,13 +551,13 @@ export class EnemySystem {
       bot.lastHitSource = null;
       bot.target = null;
       bot.playerVisible = false;
-      bot.perceptionRemaining = 0;
+      bot.perceptionRemaining = bot.index * 0.07;
       bot.path = [];
       bot.pathGoal = null;
       bot.pathIndex = 0;
+      bot.pathUpdateRemaining = 0.15 + bot.index * 0.25;
       bot.root.rotation.z = 0;
       if (bot.root.parent !== this.enemyGroup) this.enemyGroup.add(bot.root);
-      this.assignPatrolPath(bot);
     }
     this.notifyActiveCount();
   }
@@ -540,7 +630,6 @@ export class EnemySystem {
     bot.root.userData.team = bot.team;
     bot.root.addEventListener("damage", (event) => this.handleDamage(bot, event));
     this.enemyGroup.add(bot.root);
-    this.assignPatrolPath(bot);
     return bot;
   }
 
@@ -649,11 +738,11 @@ export class EnemySystem {
     bot.lastHitSource = null;
     bot.target = null;
     bot.playerVisible = false;
-    bot.perceptionRemaining = 0;
+    bot.perceptionRemaining = bot.index * 0.07;
+    bot.pathUpdateRemaining = 0.15 + bot.index * 0.25;
     bot.root.rotation.z = 0;
     this.enemyGroup.add(bot.root);
     bot.root.updateMatrixWorld(true);
-    this.assignPatrolPath(bot);
     this.notifyActiveCount();
   }
 
@@ -826,9 +915,7 @@ export class EnemySystem {
     bot.pathUpdateRemaining -= delta;
     if (bot.playerVisible) {
       const desiredRange = difficulty.attackRange * 0.62;
-      const targetMoved = !bot.pathGoal ||
-        horizontalDistanceSquared(bot.pathGoal, targetPosition) > 5.5;
-      if (playerDistance > desiredRange && (bot.pathUpdateRemaining <= 0 || targetMoved)) {
+      if (playerDistance > desiredRange && bot.pathUpdateRemaining <= 0) {
         this.assignPath(bot, targetPosition);
       }
     } else if (bot.state === "investigating") {
@@ -842,7 +929,7 @@ export class EnemySystem {
         bot.lastSeenRemaining = 0;
         bot.state = "patrol";
       }
-    } else if (bot.pathIndex >= bot.path.length) {
+    } else if (bot.pathIndex >= bot.path.length && bot.pathUpdateRemaining <= 0) {
       this.assignPatrolPath(bot);
     }
 
